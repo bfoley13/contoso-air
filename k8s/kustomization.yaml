@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: contoso-air
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- deployment.yaml
+- service.yaml
+- hpa.yaml
+- pdb.yaml
+- ingress.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app: contoso-air
+  version: v1.0.0
+  managed-by: kustomize
+
+# Images to replace - update this with your ACR
+images:
+- name: contoso-air
+  newName: your-acr.azurecr.io/contoso-air
+  newTag: latest
+
+# ConfigMap generator for environment-specific configs
+configMapGenerator:
+- name: contoso-air-config
+  literals:
+  - NODE_ENV=production
+  - PORT=3000
+  behavior: replace
+
+# Secret generator (you can override in overlays)
+secretGenerator:
+- name: contoso-air-secrets
+  literals:
+  - AZURE_COSMOS_LISTCONNECTIONSTRINGURL=changeme
+  - AZURE_COSMOS_SCOPE=changeme
+  - AZURE_COSMOS_CLIENTID=changeme
+  type: Opaque
+  behavior: replace
+
+# Patches for different environments
+patchesStrategicMerge: []
+
+# JSON patches
+patches: []

@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: contoso-air-web-metrics
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+    component: web
+spec:
+  selector:
+    matchLabels:
+      app: contoso-air
+      component: web
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: contoso-air-alerts
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+spec:
+  groups:
+  - name: contoso-air.rules
+    rules:
+    - alert: ContosoAirHighErrorRate
+      expr: sum(rate(http_requests_total{job="contoso-air-web",code=~"5.."}[5m])) / sum(rate(http_requests_total{job="contoso-air-web"}[5m])) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High error rate detected for Contoso Air
+        description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+    
+    - alert: ContosoAirHighResponseTime
+      expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="contoso-air-web"}[5m])) by (le)) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High response time for Contoso Air
+        description: "95th percentile response time is {{ $value }}s"
+    
+    - alert: ContosoAirPodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="contoso-air"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod is crash looping
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"
+    
+    - alert: ContosoAirPodNotReady
+      expr: kube_pod_status_ready{namespace="contoso-air", condition="false"} == 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Pod not ready
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 10 minutes"

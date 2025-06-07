@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: contoso-air-web-pdb
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+    component: web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: contoso-air
+      component: web

@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: contoso-air-web
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+    component: web
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: contoso-air
+      component: web
+  template:
+    metadata:
+      labels:
+        app: contoso-air
+        component: web
+    spec:
+      # Security context following Kubernetes Pod Security Standards
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Pod anti-affinity for improved resiliency
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - contoso-air
+                - key: component
+                  operator: In
+                  values:
+                  - web
+              topologyKey: kubernetes.io/hostname
+      
+      # Topology spread constraints for better distribution
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: contoso-air
+            component: web
+      
+      containers:
+      - name: contoso-air-web
+        image: acrcontosoair1749252417.azurecr.io/contoso-air:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        
+        # Environment variables from ConfigMap and Secrets
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: contoso-air-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: contoso-air-config
+              key: PORT
+        - name: AZURE_COSMOS_LISTCONNECTIONSTRINGURL
+          valueFrom:
+            secretKeyRef:
+              name: contoso-air-secrets
+              key: AZURE_COSMOS_LISTCONNECTIONSTRINGURL
+        - name: AZURE_COSMOS_SCOPE
+          valueFrom:
+            secretKeyRef:
+              name: contoso-air-secrets
+              key: AZURE_COSMOS_SCOPE
+        - name: AZURE_COSMOS_CLIENTID
+          valueFrom:
+            secretKeyRef:
+              name: contoso-air-secrets
+              key: AZURE_COSMOS_CLIENTID
+        
+        # Resource limits and requests
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+        
+        # Startup probe - gives the app time to start
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12
+          successThreshold: 1
+        
+        # Liveness probe - restarts container if unhealthy
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Readiness probe - removes from service if not ready
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1

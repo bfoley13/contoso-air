@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: contoso-air-web-service
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+    component: web
+spec:
+  type: ClusterIP
+  selector:
+    app: contoso-air
+    component: web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  sessionAffinity: None
