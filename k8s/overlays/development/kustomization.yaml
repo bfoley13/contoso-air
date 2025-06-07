@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: contoso-air-dev
+
+resources:
+- ../../
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+
+replicas:
+- name: contoso-air-web
+  count: 1
+
+images:
+- name: contoso-air
+  newTag: dev
+
+configMapGenerator:
+- name: contoso-air-config
+  literals:
+  - NODE_ENV=development
+  - PORT=3000
+  behavior: replace
+
+patchesStrategicMerge:
+- deployment-patch.yaml

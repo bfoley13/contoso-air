@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: contoso-air-config
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  # Azure CosmosDB connection details - these will be set as environment variables
+  # The actual values should be provided during deployment

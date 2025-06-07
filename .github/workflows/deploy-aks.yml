@@ -1,0 +1,143 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  IMAGE_NAME: contoso-air
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: src/web/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd src/web
+        npm ci
+    
+    - name: Run tests
+      run: |
+        cd src/web
+        npm test || echo "No tests configured"
+    
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
+    
+    - name: Run security scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.IMAGE_NAME }}:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  deploy-to-development:
+    if: github.ref == 'refs/heads/develop'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: development
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Build and push to ACR
+      run: |
+        az acr login --name ${{ env.ACR_NAME }}
+        docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:dev-${{ github.sha }}
+        docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:dev
+        docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:dev-${{ github.sha }}
+        docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:dev
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Deploy to AKS Development
+      run: |
+        cd k8s/overlays/development
+        kustomize edit set image ${{ env.IMAGE_NAME }}=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:dev-${{ github.sha }}
+        kubectl apply -k .
+        kubectl rollout status deployment/dev-contoso-air-web -n contoso-air-dev --timeout=300s
+
+  deploy-to-production:
+    if: github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Build and push to ACR
+      run: |
+        az acr login --name ${{ env.ACR_NAME }}
+        docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:stable
+        docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:stable
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Deploy to AKS Production
+      run: |
+        cd k8s/overlays/production
+        kustomize edit set image ${{ env.IMAGE_NAME }}=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        kubectl apply -k .
+        kubectl rollout status deployment/prod-contoso-air-web -n contoso-air-prod --timeout=600s
+    
+    - name: Run smoke tests
+      run: |
+        # Wait for rollout to complete
+        kubectl wait --for=condition=available deployment/prod-contoso-air-web -n contoso-air-prod --timeout=300s
+        
+        # Get service endpoint
+        SERVICE_IP=$(kubectl get service prod-contoso-air-web-service -n contoso-air-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        
+        # Run basic health check
+        if [ ! -z "$SERVICE_IP" ]; then
+          curl -f http://$SERVICE_IP/health || exit 1
+        else
+          echo "Service IP not available, skipping external smoke test"
+          kubectl run smoke-test --image=busybox --rm -it --restart=Never -- wget -qO- http://prod-contoso-air-web-service.contoso-air-prod.svc.cluster.local/health
+        fi

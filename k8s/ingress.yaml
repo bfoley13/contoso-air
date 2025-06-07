@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: contoso-air-ingress
+  namespace: contoso-air
+  labels:
+    app: contoso-air
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    # For Azure Application Gateway Ingress Controller (AGIC)
+    # Uncomment and modify the following annotations as needed:
+    # appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    # appgw.ingress.kubernetes.io/connection-draining: "true"
+    # appgw.ingress.kubernetes.io/connection-draining-timeout: "30"
+    # appgw.ingress.kubernetes.io/cookie-based-affinity: "false"
+    # appgw.ingress.kubernetes.io/request-timeout: "30"
+    
+    # For NGINX Ingress Controller (alternative)
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+  - host: contoso-air.example.com  # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: contoso-air-web-service
+            port:
+              number: 80
+  # Uncomment for TLS/SSL
+  # tls:
+  # - hosts:
+  #   - contoso-air.example.com
+  #   secretName: contoso-air-tls
