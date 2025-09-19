@@ -62,6 +62,7 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/", require("./routes"));
+app.use("/api/chat", require("./routes/chat"));
 
 // Health check endpoint for Kubernetes probes
 app.get("/health", function (req, res) {
