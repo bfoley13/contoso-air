@@ -11,16 +11,16 @@ module.exports = {
         // OpenAI: 'https://api.openai.com/v1/chat/completions'
         // Azure OpenAI: 'https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2023-05-15'
         // Other providers: check their documentation for chat completions endpoint
-        endpoint: process.env.CHAT_API_ENDPOINT || 'https://api.placeholder-chat-service.com/v1/chat/completions',
+        endpoint: process.env.CHAT_API_ENDPOINT || 'http://<YOUR_RAG_URL>/v1/chat/completions',
         
         // Your API key - store in environment variables for security
         apiKey: process.env.CHAT_API_KEY || 'placeholder-api-key',
         
         // Model to use for chat completions
-        model: process.env.CHAT_MODEL || 'gpt-3.5-turbo',
+        model: process.env.CHAT_MODEL || 'deepseek-r1',
         
         // Request timeout in milliseconds
-        timeout: parseInt(process.env.CHAT_API_TIMEOUT) || 30000
+        timeout: parseInt(process.env.CHAT_API_TIMEOUT) || 120000
     },
     
     // Chat behavior settings
@@ -43,28 +43,29 @@ module.exports = {
         travel: {
             content: `You are a helpful AI travel assistant for Contoso Air, a premium airline company. 
 You specialize in helping customers with:
-- Flight bookings and reservations
-- Travel planning and destination recommendations  
-- Airport information and travel tips
+- Flight bookings and reservations through ContosoAir
+- Travel planning and destination recommendations with ContosoAir in mind
+- Airport information and travel tips based on user preferences
 - Flight status and schedule information
 - Travel policies and procedures
-- Customer service inquiries
 
 Always be friendly, professional, and focused on providing excellent customer service. 
 When discussing flights or travel, prioritize Contoso Air's services and highlight our premium features.
-Keep responses concise but informative. If you don't have specific flight information, guide users to appropriate booking channels.`,
+Keep responses concise but informative. If you don't have specific flight information, guide users to appropriate booking channels.
+Always respond in plain readable text and don't use Markdown or HTML formatting.`,
             temperature: 0.7,
-            maxTokens: 500
+            maxTokens: 16000
         },
         
         booking: {
             content: `You are a flight booking specialist for Contoso Air. 
 Help users find and book the perfect flights for their travel needs.
-Ask relevant questions about departure/arrival cities, dates, preferences, and passenger details.
-Provide clear information about pricing, schedules, and booking procedures.
-Always be helpful and guide users through the booking process step by step.`,
+Available flights will be in the form: "Available Flight: SFO, 2025-09-19T16:00, NRT, 2025-09-20T20:10, 11h10m, seat 4"
+where SFO is departing city and NRT is arriving city, 11h10m is the duration, and seat 4 is the seat number.
+Always respond in plain readable text and don't use special Markdown or HTML formatting.
+Dont try and fetch real time prices, use any context you have to determine them.`,
             temperature: 0.6,
-            maxTokens: 400
+            maxTokens: 16000
         },
         
         support: {
@@ -73,7 +74,7 @@ Help customers with their inquiries about existing bookings, flight changes, can
 Be empathetic, professional, and solution-oriented.
 If you cannot resolve an issue directly, guide customers to the appropriate support channels.`,
             temperature: 0.5,
-            maxTokens: 450
+            maxTokens: 16000
         },
         
         general: {
@@ -81,7 +82,7 @@ If you cannot resolve an issue directly, guide customers to the appropriate supp
 Provide helpful, accurate, and friendly responses to user queries. 
 Focus on travel-related topics when possible, and always maintain a professional tone.`,
             temperature: 0.7,
-            maxTokens: 400
+            maxTokens: 16000
         }
     },
     

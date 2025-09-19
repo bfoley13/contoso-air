@@ -70,7 +70,7 @@ class ChatService {
         }
 
         return {
-            role: 'system',
+            role: 'assistant',
             content: systemContent
         };
     }
@@ -87,15 +87,19 @@ class ChatService {
             context = 'travel',
             userInfo = {},
             temperature = 0.7,
-            maxTokens = 500,
+            maxTokens = 16000,
             includeHistory = true
         } = options;
 
         // Build messages array
         const messages = [];
-        
+        let calculatedContext = context
+        if (userMessage.toLowerCase().includes("available flight")) {
+            calculatedContext = "booking"
+        }
+
         // Add system prompt
-        messages.push(this.buildSystemPrompt(context, userInfo));
+        messages.push(this.buildSystemPrompt(calculatedContext, userInfo));
         
         // Add conversation history if requested
         if (includeHistory) {
@@ -115,11 +119,12 @@ class ChatService {
 
         // Create the API request payload
         return {
+            index_name: "contosoair",
             model: this.model,
             messages: messages,
             temperature: temperature,
-            max_tokens: maxTokens,
-            top_p: 1,
+            // max_tokens: maxTokens,
+            // top_p: 1,
             frequency_penalty: 0,
             presence_penalty: 0
         };
@@ -132,13 +137,17 @@ class ChatService {
      */
     async sendChatRequest(requestPayload) {
         try {
+            console.log('Sending request to:', this.apiEndpoint);
+            console.log('Request payload:', JSON.stringify(requestPayload, null, 2));
+            
             const response = await axios.post(this.apiEndpoint, requestPayload, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
                 },
-                timeout: 30000 // 30 second timeout
+                timeout: this.config.api.timeout
             });
+
+            console.log(response.data)
 
             return {
                 success: true,
